@@ -1,5 +1,6 @@
 use crate::packet::Packet;
 use crate::error::PacketError;
+use crate::network::ToBytes;
 
 pub const PACKET_PREREGISTER_CONNECTION: i32 = 160;
 
@@ -19,7 +20,7 @@ impl PreregisterConnectionPacket {
         Self {
             package_name: "com.corrodinggames.rts".to_string(),
             protocol_version: 4,
-            game_version: 173,
+            game_version: 176,
             another_game_version: 2,
             relay_id: String::new(),
             nickname: "wanan".to_string(),
@@ -66,7 +67,9 @@ impl PreregisterConnectionPacket {
         })
     }
 
-    pub fn to_bytes(&self) -> Result<Vec<u8>, PacketError> {
+}
+impl ToBytes for PreregisterConnectionPacket {
+    fn to_bytes(&self) -> Result<Vec<u8>, PacketError> {
         let mut inner = Packet::new();
         inner.write_i32(PACKET_PREREGISTER_CONNECTION)?;
         inner.write_string(&self.package_name)?;

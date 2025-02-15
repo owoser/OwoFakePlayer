@@ -1,35 +1,46 @@
-mod error;
-mod packet;
-mod protocol;
 mod network;
-use std::net::{Shutdown, TcpStream};
-use error::PacketError;
-use protocol::preregister_connection::PreregisterConnectionPacket;
-use network::send;
+mod protocol;
+mod packet;
+mod error;
+mod packet_utils;
 
-fn main() -> Result<(), PacketError> {
-    let packet = PreregisterConnectionPacket::new();
-    println!("{:?}", packet.to_bytes().unwrap());
+use std::{io, net};
+use std::error::Error;
+use std::net::IpAddr;
+use std::str::FromStr;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::TcpStream;
+use crate::network::{make_packet, packet_con, send_packet, ToBytes};
+use crate::protocol::heart_beat::HeartBeatPacket;
+use crate::protocol::preregister_connection::PreregisterConnectionPacket;
 
-    let ser_ip = "192.168.1.5:5123";
-    let mut stream = match TcpStream::connect(ser_ip) {
-        Ok(s) => s,
-        Err(e) => {
-            eprintln!("Error connecting to server: {}", e);
-            return Ok(());
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+
+    let mut stream = TcpStream::connect("192.168.1.7:5123").await?;
+    println!("正在连接服务器:{:?}", stream);
+
+    // 发送消息 预注册包
+    let mut packet = PreregisterConnectionPacket::new();
+    send_packet(&mut stream, &mut packet).await?;
+
+    // 读取响应
+    let mut buf = [0; 1024];
+    loop{
+        match stream.read(&mut buf).await{
+            Ok(0) => {
+                println!("连接已经关闭");
+                break;
+            }
+            Ok(n) => {
+                let mut a = &buf[..n];
+                packet_con(a, &mut stream).await.expect("TODO: panic message");
+            }
+            Err(e) => {
+                eprintln!("读取错误:{}",e);
+                break;
+            }
         }
-    };
-
-    if let Err(e) = send(&mut stream, &packet) {
-        eprintln!("发送数据包失败: {}", e);
-        stream
-            .shutdown(Shutdown::Both)
-            .map_err(|e| PacketError::IoError(e.to_string()))?;
-        return Ok(());
     }
-
-    stream
-        .shutdown(Shutdown::Both)
-        .map_err(|e| PacketError::IoError(e.to_string()))?;
     Ok(())
 }
